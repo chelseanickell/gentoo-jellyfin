@@ -1,0 +1,155 @@
+services:
+
+  gluetun:
+    image: qmcgaw/gluetun:latest
+    container_name: gluetun
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    ports:
+      - 8080:8080
+      - 6881:6881
+      - 6881:6881/udp
+    environment:
+      - VPN_SERVICE_PROVIDER=${VPN_SERVICE_PROVIDER}
+      - VPN_TYPE=${VPN_TYPE}
+      - WIREGUARD_PRIVATE_KEY=${WIREGUARD_PRIVATE_KEY}
+    networks:
+      - caddy
+    labels:
+      caddy: qbittorrent.${FQDN}
+      caddy.reverse_proxy: "{{upstreams 8080}}"
+    restart: unless-stopped
+  
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    container_name: qbittorrent
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+      - WEBUI_PORT=8080
+    volumes:
+      - ./qbittorrent:/config
+      - ${DOWNLOADS_PATH}:/downloads
+    restart: unless-stopped
+    network_mode: "container:gluetun"
+    depends_on:
+      gluetun:
+        condition: service_healthy
+
+prowlarr:
+  image: lscr.io/linuxserver/prowlarr:latest
+  container_name: prowlarr
+  environment:
+    - PUID=${PUID}
+    - PGID=${PGID}
+    - TZ=${TZ}
+  volumes:
+    - ./prowlarr:/config
+  networks:
+    - caddy
+  labels:
+    caddy: prowlarr.${FQDN}
+    caddy.reverse_proxy: "{{upstreams 9696}}"
+  restart: unless-stopped
+
+radarr:
+  image: lscr.io/linuxserver/radarr:latest
+  container_name: radarr
+  environment:
+    - PUID=${PUID}
+    - PGID=${PGID}
+    - TZ=${TZ}
+  volumes:
+    - ./radarr:/config
+    - ${MEDIA_PATH}:/media
+    - ${DOWNLOADS_PATH}:/downloads
+  networks:
+    - caddy
+  labels:
+    caddy: radarr.${FQDN}
+    caddy.reverse_proxy: "{{upstreams 7878}}"
+  restart: unless-stopped
+
+sonarr:
+  image: lscr.io/linuxserver/sonarr:latest
+  container_name: sonarr
+  environment:
+    - PUID=${PUID}
+    - PGID=${PGID}
+    - TZ=${TZ}
+  volumes:
+    - ./sonarr:/config
+    - ${MEDIA_PATH}:/media
+    - ${DOWNLOADS_PATH}:/downloads
+  networks:
+    - caddy
+  labels:
+    caddy: sonarr.${FQDN}
+    caddy.reverse_proxy: "{{upstreams 8989}}"
+  restart: unless-stopped
+
+bazarr:
+  image: linuxserver/bazarr:latest
+  container_name: bazarr
+  environment:
+    - PUID=${PUID}
+    - PGID=${PGID}
+    - TZ=${TZ}
+  volumes:
+    - ./bazarr:/config
+    - ${MEDIA_PATH}:/media
+  networks:
+    - caddy
+  labels:
+    caddy: bazarr.${FQDN}
+    caddy.reverse_proxy: "{{upstreams 6767}}"
+  restart: unless-stopped
+
+flaresolverr:
+  image: ghcr.io/flaresolverr/flaresolverr:latest
+  container_name: flaresolverr
+  environment:
+    - LOG_LEVEL=info
+    - TZ=${TZ}
+  ports:
+    - 8191:8191
+  restart: unless-stopped
+
+jellyfin:
+   image: jellyfin/jellyfin:latest
+   container_name: jellyfin
+   environment:
+     - PUID=${PUID}
+     - PGID=${PGID}
+     - TZ=${TZ}
+   volumes:
+     - ./jellyfin/config:/config
+     - ./jellyfin/cache:/cache
+     - ${MEDIA_PATH}:/media
+   networks:
+     - caddy
+   labels:
+     caddy: jellyfin.${FQDN}
+     caddy.reverse_proxy: "{{upstreams 8096}}"
+   restart: unless-stopped
+
+  seerr:
+    image: ghcr.io/seerr-team/seerr:latest
+    container_name: seerr
+    environment:
+      - TZ=${TZ}
+    volumes:
+      - ./seerr:/app/config
+    networks:
+      - caddy
+    labels:
+      caddy: seerr.${FQDN}
+      caddy.reverse_proxy: "{{upstreams 5055}}"
+    restart: unless-stopped
+  
+networks:
+  caddy:
+    external: true
